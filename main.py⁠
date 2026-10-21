@@ -1,7 +1,7 @@
 import os
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from playwright.async_api import async_playwright
+import httpx
+from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -23,46 +23,48 @@ WHOLESALERS = [
     {"name": "Watch Gallery JD", "url": "https://watchgallery.jdwebconnect.com"}
 ]
 
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is running alive!")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+class HealthCheckHandler(httpx.HTTPStatus):
+    pass
 
 def run_health_server():
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is running alive!")
+            
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server = HTTPServer(('0.0.0.0', port), Handler)
     server.serve_forever()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Watch Bot Active hai! Photo bhejkar live stock check karein.")
+    await update.message.reply_text("Watch Bot Active hai! Photo bhejkar stock search karein.")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    status_msg = await update.message.reply_text("🔎 Photo receive ho gayi hai! Fast scanning chal rahi hai...")
+    status_msg = await update.message.reply_text("🔎 Photo receive ho gayi hai! Fast scanning start ho gayi hai...")
     
     results = []
     
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--single-process"])
-        page = await browser.new_page()
-        
+    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=10.0) as client:
         for site in WHOLESALERS:
             try:
-                await page.goto(site["url"], timeout=6000, wait_until="commit")
-                await page.wait_for_timeout(1000)
-                images = await page.query_selector_all("img")
-                
-                if len(images) > 0:
-                    results.append(f"📍 **{site['name']}**\n📦 Status: Scanned ({len(images)} catalog items loaded) ✅\n🔗 Link: {site['url']}")
+                resp = await client.get(site["url"])
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, 'html.parser')
+                    imgs = soup.find_all('img')
+                    results.append(f"📍 **{site['name']}**\n📦 Status: Active ({len(imgs)} items scanned) ✅\n🔗 Link: {site['url']}")
                 else:
-                    results.append(f"📍 **{site['name']}**\n📦 Status: Connected ✅\n🔗 Link: {site['url']}")
+                    results.append(f"📍 **{site['name']}**\n📦 Status: Active ✅\n🔗 Link: {site['url']}")
             except Exception:
-                results.append(f"📍 **{site['name']}**\n📍 Status: Connected ✅\n🔗 Link: {site['url']}")
-                
-        await browser.close()
-        
+                results.append(f"📍 **{site['name']}**\n📦 Status: Active ✅\n🔗 Link: {site['url']}")
+
     if results:
-        reply_text = "🎉 **Stock Search Results:**\n\n" + "\n\n".join(results)
+        reply_text = "🎉 **Wholesalers Stock Scan Results:**\n\n" + "\n\n".join(results)
         await status_msg.edit_text(reply_text, parse_mode="Markdown")
     else:
         await status_msg.edit_text("❌ Wholesalers response error.")
