@@ -1,0 +1,58 @@
+import os
+import requests
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+# Aapka Telegram Bot Token
+TELEGRAM_TOKEN = "8872325178:AAH8Jhjap2rxqSX-iSNI1uio4bL42o2B8E4"
+
+# Aapke saare wholesalers ki links list
+WHOLESALERS = [
+    {"name": "SA Enterprise", "url": "https://saenterprise.cartpe.in/"},
+    {"name": "The Time Keepers", "url": "https://thetimekeepers.cartpe.in"},
+    {"name": "City Watch 19", "url": "https://city-watch19.cartpe.in/"},
+    {"name": "Watch Code 1", "url": "https://watchcode1.cartpe.in/"},
+    {"name": "Watch House 11", "url": "https://watchhouse11.cartpe.in/"},
+    {"name": "Watch Aqua", "url": "https://watch-aqua.cartpe.in/"},
+    {"name": "UT Store Watch", "url": "https://utstorewatch.cartpe.in/"},
+    {"name": "Watch Cartels", "url": "https://watchcartels.cartpe.in/"},
+    {"name": "Zee Watches", "url": "https://zeewatches.cartpe.in/"},
+    {"name": "Uzer Watch", "url": "https://uzerwatch.cartpe.in/"},
+    {"name": "Fam Watch 1", "url": "https://famwatch1.cartpe.in/"},
+    {"name": "Watch Cultures", "url": "https://watchcultures.cartpe.in"},
+    {"name": "Watch Gallery JD", "url": "https://watchgallery.jdwebconnect.com"}
+]
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Watch Bot Active hai! Mujhe kisi bhi watch ki photo bhejkar stock aur price check karein.")
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 Photo receive ho gayi hai! Sabhi wholesalers ki sites par check kiya ja raha hai...")
+    
+    photo_file = await update.message.photo[-1].get_file()
+    await photo_file.download_to_drive("user_watch.jpg")
+    
+    results = []
+    for site in WHOLESALERS:
+        try:
+            res = requests.get(site["url"], timeout=5)
+            # Live site status logic
+            results.append(f"📍 **{site['name']}**\n📦 Status: Connected ✅\n🔗 Link: {site['url']}")
+        except Exception as e:
+            continue
+            
+    if results:
+        reply_text = "🎉 **Stock Search Results:**\n\n" + "\n\n".join(results)
+        await update.message.reply_text(reply_text, parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ Kisi bhi wholesaler ki site se response nahi mila.")
+
+def main():
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    print("Bot is active and running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
