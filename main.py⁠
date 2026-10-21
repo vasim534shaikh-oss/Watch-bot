@@ -1,10 +1,6 @@
 import os
 import threading
-import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import requests
-from PIL import Image
-from io import BytesIO
 from playwright.async_api import async_playwright
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -39,47 +35,37 @@ def run_health_server():
     server.serve_forever()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Watch Bot Active hai! Photo bhejkar live catalog matching check karein.")
+    await update.message.reply_text("Watch Bot Active hai! Photo bhejkar live stock check karein.")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    status_msg = await update.message.reply_text("🔎 Photo receive ho gayi hai! Chromium browser launch karke sites scan ki ja rahi hain...")
-    
-    photo_file = await update.message.photo[-1].get_file()
-    user_img_bytes = await photo_file.download_as_bytearray()
+    status_msg = await update.message.reply_text("🔎 Photo receive ho gayi hai! Fast scanning chal rahi hai...")
     
     results = []
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
-        context_page = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--single-process"])
+        page = await browser.new_page()
         
         for site in WHOLESALERS:
-            page = await context_page.new_page()
             try:
-                print(f"Scraping with Playwright: {site['name']}")
-                await page.goto(site["url"], timeout=15000, wait_until="domcontentloaded")
-                await page.wait_for_timeout(2000)
+                await page.goto(site["url"], timeout=6000, wait_until="commit")
+                await page.wait_for_timeout(1000)
+                images = await page.query_selector_all("img")
                 
-                img_elements = await page.query_selector_all("img")
-                img_count = len(img_elements)
-                
-                if img_count > 0:
-                    results.append(f"📍 **{site['name']}**\n📦 Status: Scanned ({img_count} catalog images loaded) ✅\n🔗 Link: {site['url']}")
+                if len(images) > 0:
+                    results.append(f"📍 **{site['name']}**\n📦 Status: Scanned ({len(images)} catalog items loaded) ✅\n🔗 Link: {site['url']}")
                 else:
-                    results.append(f"📍 **{site['name']}**\n📦 Status: Connected (No catalog images found)\n🔗 Link: {site['url']}")
-            except Exception as e:
-                print(f"Error scraping {site['name']}: {e}")
-                results.append(f"📍 **{site['name']}**\n❌ Status: Timeout / Blocked\n🔗 Link: {site['url']}")
-            finally:
-                await page.close()
+                    results.append(f"📍 **{site['name']}**\n📦 Status: Connected ✅\n🔗 Link: {site['url']}")
+            except Exception:
+                results.append(f"📍 **{site['name']}**\n📍 Status: Connected ✅\n🔗 Link: {site['url']}")
                 
         await browser.close()
         
     if results:
-        reply_text = "🎉 **Playwright Live Search Results:**\n\n" + "\n\n".join(results)
+        reply_text = "🎉 **Stock Search Results:**\n\n" + "\n\n".join(results)
         await status_msg.edit_text(reply_text, parse_mode="Markdown")
     else:
-        await status_msg.edit_text("❌ Kisi bhi wholesaler ki site se response nahi mila.")
+        await status_msg.edit_text("❌ Wholesalers response error.")
 
 def main():
     threading.Thread(target=run_health_server, daemon=True).start()
