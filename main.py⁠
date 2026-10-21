@@ -1,12 +1,12 @@
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Aapka Telegram Bot Token
 TELEGRAM_TOKEN = "8872325178:AAH8Jhjap2rxqSX-iSNI1uio4bL42o2B8E4"
 
-# Aapke saare wholesalers ki links list
 WHOLESALERS = [
     {"name": "SA Enterprise", "url": "https://saenterprise.cartpe.in/"},
     {"name": "The Time Keepers", "url": "https://thetimekeepers.cartpe.in"},
@@ -23,8 +23,20 @@ WHOLESALERS = [
     {"name": "Watch Gallery JD", "url": "https://watchgallery.jdwebconnect.com"}
 ]
 
+# Health check server for Render port binding
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running alive!")
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server.serve_forever()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Watch Bot Active hai! Mujhe kisi bhi watch ki photo bhejkar stock aur price check karein.")
+    await update.message.reply_text("Watch Bot Active hai! Photo bhejkar stock check karein.")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔎 Photo receive ho gayi hai! Sabhi wholesalers ki sites par check kiya ja raha hai...")
@@ -36,7 +48,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for site in WHOLESALERS:
         try:
             res = requests.get(site["url"], timeout=5)
-            # Live site status logic
             results.append(f"📍 **{site['name']}**\n📦 Status: Connected ✅\n🔗 Link: {site['url']}")
         except Exception as e:
             continue
@@ -48,6 +59,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Kisi bhi wholesaler ki site se response nahi mila.")
 
 def main():
+    threading.Thread(target=run_health_server, daemon=True).start()
+    
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
@@ -56,3 +69,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
